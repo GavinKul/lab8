@@ -6,37 +6,45 @@
 #include <unistd.h>
 
 volatile sig_atomic_t largest = 2;
+volatile sig_atomic_t interrupted = 0;
 
 void handler(int sig) {
-    struct termios old, new;
-    char answer;
-
-    tcgetattr(STDIN_FILENO, &old);
-    new = old;
-    new.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &new);
-
-    printf("\n%d  Quit [y/n]? ", (int)largest);
-    fflush(stdout);
-
-    if (read(STDIN_FILENO, &answer, 1) == 1) {
-        printf("%c\n", answer);
-    } else {
-        answer = 'n';
-    }
-
-    tcsetattr(STDIN_FILENO, TCSANOW, &old);
-
-    if (answer == 'y' || answer == 'Y')
-        exit(0);
+    interrupted = 1;
 }
 
 int main() {
+    struct termios old, new;
     int num = 3;
 
     signal(SIGINT, handler);
 
     while (1) {
+        if (interrupted) {
+            char answer;
+
+            interrupted = 0;
+
+            printf("\n%d  Quit [y/n]? ", (int)largest);
+            fflush(stdout);
+
+            tcgetattr(STDIN_FILENO, &old);
+            new = old;
+            new.c_lflag &= ~(ICANON | ECHO);
+            new.c_cc[VMIN] = 1;
+            new.c_cc[VTIME] = 0;
+            tcsetattr(STDIN_FILENO, TCSANOW, &new);
+
+            if (read(STDIN_FILENO, &answer, 1) != 1)
+                answer = 'n';
+
+            tcsetattr(STDIN_FILENO, TCSANOW, &old);
+
+            printf("%c\n", answer);
+
+            if (answer == 'y' || answer == 'Y')
+                return 0;
+        }
+
         int prime = 1;
 
         for (int i = 2; i < num; i++) {
@@ -54,3 +62,4 @@ int main() {
 
     return 0;
 }
+
